@@ -1,69 +1,61 @@
 from spyne.service import ServiceBase
-from spyne.decorator import rpc
-from spyne.model.primitive import Unicode
 from spyne.application import Application
 from spyne.protocol.soap import Soap11
 from spyne.server.django import DjangoApplication
-
-from spyne.model.complex import Iterable
 from django.views.decorators.csrf import csrf_exempt
-from .complexTypes import Account as complexAccount
-from .models import Account as modelAccount, Client as modelClient
-
+from spyne import Iterable, Unicode,rpc
+from .complexTypes import Account as ComplexAccount
+from .models import Account as ModelAccount, Client as ModelClient
 class AccountService(ServiceBase):
-    @rpc(complexAccount, _returns=Unicode)
-    def add_account(self, account):
-        if modelAccount.objects.filter(pk=account.rib).exists():
-            return 'This account already exists'
-        #verify if the client already exists
+    @rpc(ComplexAccount, _returns=Unicode)
+    def add_account(self, account: ComplexAccount) -> str:
+    # Check if an account with the given RIB already exists
+        if ModelAccount.objects.filter(pk=account.rib).exists():
+            return "An account with the same RIB already exists"
+
         try:
-            client=modelClient.objects.get(pk=account.client.cin)
-        except modelClient.DoesNotExist:
-
-                #create a new Client instance
-                client=modelClient(account.client.cin, account.client.name,account.client.familyName,account.client.email)
-                #insert the client into the DB
-                client.save()
-            #convert the account ComplexType into Model Account
-        acc=modelAccount()
-        acc.rib=account.rib
-        acc.client=client
-        acc.balance=account.balance
-        acc.creation_date=account.creationDate
-        acc.save()
-        return 'The account with RIB {account.rib} is successfully created.'
-
-    @rpc(Unicode,_returns=complexAccount)
-    def get_account_details(self, email:str)-> complexAccount:
-        account=modelAccount.objects.filter(client__email__iexact=email).first()
-        if account is None:
-            raise ValueError(f'There is no account for email {email}')
-        #convert for Model Account to complexType Account
-        complexAcc=complexAccount()
-        complexAcc.rib=account.rib
-        complexAcc.client=account.client
-        complexAcc.balance=account.balance
-        complexAcc.creationDate=account.creation_date
-        return complexAcc
-    @rpc(_returns=Iterable(complexAccount))
-    def get_all_accounts(self):
-        accounts=modelAccount.objects.all()
-        #convert for Model Accounts to an iterable of complex type Accounts
-        for account in accounts:
-            complexAcc=complexAccount(
-                rib=account.rib,
-                client=account.client,
-                balance=account.balance,
-                creationDate=account.creation_date
+            # Check if a client with the given CIN exists
+            clt = ModelClient.objects.get(cin=account.client.cin)
+        except ModelClient.DoesNotExist:
+            # If the client does not exist, create a new one
+            clt = ModelClient(
+                cin=account.client.cin,
+                name=account.client.name,
+                familyName=account.client.familyName,
+                email=account.client.email
             )
-            yield complexAcc
+            clt.save()
 
-#Configuration of The SOAP API
+        # Create and save the new account
+        acc = ModelAccount(
+            rib=account.rib,
+            balance=account.balance,
+            creation_date=account.creationDate,
+            client=clt,
+            accountType=account.accountType
+        )
+        acc.save()
+        return f"The account with RIB {acc.rib} has been created"
+    @rpc(_returns=Iterable(ComplexAccount))
+    def get_all_accounts(self)->Iterable:
+        accounts=ModelAccount.objects.all()
+        l=[]
+        for account in accounts:
+            acc=ComplexAccount(
+                rib=account.rib,
+                creationDate=account.creation_date,
+                balance=account.balance,
+                accountType=account.accountType,
+            )
+            l.append(acc)
+        return l
+
+#configure the SOAP API
 application=Application(
-    [AccountService],
+    [AccountService,],
     tns='bank.isg.tn',
     in_protocol=Soap11(validator='lxml'),
     out_protocol=Soap11()
 )
 django_app=DjangoApplication(application)
-bank_soap_app=csrf_exempt(django_app)
+soap_bank_app=csrf_exempt(django_app)

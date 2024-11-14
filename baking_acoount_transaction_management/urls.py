@@ -1,5 +1,5 @@
 """
-URL configuration for baking_acoount_transaction_management project.
+URL configuration for bank_soap_api project.
 
 The `urlpatterns` list routes URLs to views. For more information please see:
     https://docs.djangoproject.com/en/5.1/topics/http/urls/
@@ -15,8 +15,9 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
-
+from django.urls import path, include
+from account_transaction_app import urls
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('bank/', include(urls)),
 ]
