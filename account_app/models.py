@@ -9,27 +9,29 @@ class Client(models.Model):
         return f'cin = {self.cin}, email={self.email}'
 
     class Meta:
-        ordering=['email','cin']
+        ordering=['email']
         db_table='clients'
+
+class AccountType(models.TextChoices):
+    CURRENT = 'current', 'current'
+    SAVING = 'saving', 'saving'
+    FIXED = 'fixed', 'fixed'
+    LOAN = 'loan', 'loan'
 
 class Bank(models.Model):
     name = models.CharField(max_length=255,unique=True)
     address=models.CharField(max_length=255)
     creationDate=models.DateField(auto_now_add=True)
-
-    def __str__(self):
-        return self.name
-
     class Meta:
         ordering=['name']
         db_table = 'banks'
-
 
 class Account(models.Model):
     rib=models.CharField(max_length=30,primary_key=True)
     balance=models.DecimalField(max_digits=15,decimal_places=3)
     client=models.ForeignKey(Client, on_delete=models.SET_NULL,null=True)
     creation_date=models.DateField(auto_now_add=True)
+    accountType=models.CharField(max_length=20,choices=AccountType.choices,default=AccountType.CURRENT)
     def __str__(self):
         return f'client : {self.client}, balance= {self.balance}'
     class Meta:
@@ -54,7 +56,7 @@ class Transaction(models.Model):
 
     def clean(self):
         if self.transactionType == TransactionType.TRANSFER and self.transfer_to_account is None :
-            raise ValueError('You have to specify the transfer to RIB.')
+            raise ValueError('You have to specify the RIB to transfer to.')
         if self.transactionType == TransactionType.WITHDRAW and self.amount> self.account.balance:
             raise ValueError(f"You can't withdraw more than {self.account.balance}")
     
