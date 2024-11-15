@@ -3,9 +3,11 @@ from spyne.application import Application
 from spyne.protocol.soap import Soap11
 from spyne.server.django import DjangoApplication
 from django.views.decorators.csrf import csrf_exempt
-from spyne import Iterable, Unicode,rpc
-from .complexTypes import Account as ComplexAccount
+from spyne import Iterable, Unicode,rpc,Double
+from .complexTypes import Account as ComplexAccount, Client as  ComplexClient
 from .models import Account as ModelAccount, Client as ModelClient
+
+from django.core.exceptions import ObjectDoesNotExist
 class AccountService(ServiceBase):
     @rpc(ComplexAccount, _returns=Unicode)
     def add_account(self, account: ComplexAccount) -> str:
@@ -49,6 +51,82 @@ class AccountService(ServiceBase):
             )
             l.append(acc)
         return l
+    # Get Account by RIB
+    @rpc(Unicode, _returns=ComplexAccount)
+    def get_account_by_rib(self, rib: str) -> ComplexAccount:
+        try:
+            acc = ModelAccount.objects.get(pk=rib)
+            return ComplexAccount(
+                rib=acc.rib,
+                balance=acc.balance,
+                creationDate=acc.creation_date,
+                accountType=acc.accountType,
+                client=ComplexClient(
+                    cin=acc.client.cin,
+                    name=acc.client.name,
+                    familyName=acc.client.familyName,
+                    email=acc.client.email,
+                )
+            )
+        except ModelAccount.DoesNotExist:
+            raise ObjectDoesNotExist("Account does not exist.")
+
+    # Get Accounts by Client CIN
+    @rpc(Unicode, _returns=Iterable(ComplexAccount))
+    def get_accounts_by_client_cin(self, cin: str) -> list[ComplexAccount]:
+        try:
+            client = ModelClient.objects.get(pk=cin)
+            accounts = ModelAccount.objects.filter(client=client)
+
+            return [
+                ComplexAccount(
+                    rib=acc.rib,
+                    balance=Double(acc.balance),
+                    creationDate=acc.creation_date,
+                    accountType=acc.accountType,
+                    client=ComplexClient(
+                        cin=client.cin,
+                        name=client.name,
+                        familyName=client.familyName,
+                        email=client.email,
+                    )
+                )
+                for acc in accounts
+            ]
+        except ModelClient.DoesNotExist:
+            raise ObjectDoesNotExist("Client does not exist or has no accounts.")
+
+
+# Update Account
+    @rpc(ComplexAccount, _returns=Unicode)
+    def update_account(self, account: ComplexAccount) -> str:
+        try:
+            acc = ModelAccount.objects.get(pk=account.rib)
+            acc.balance = account.balance
+            acc.accountType = account.type
+            acc.save()
+            return f"The account with RIB {acc.rib} has been updated"
+        except ModelAccount.DoesNotExist:
+            raise ObjectDoesNotExist("Account does not exist.")
+
+    # Delete Account
+    @rpc(Unicode, _returns=Unicode)
+    def delete_account(self, rib: str) -> str:
+        try:
+            acc = ModelAccount.objects.get(pk=rib)
+            client = acc.client  # Reference to the account's client
+
+            # Delete the account
+            acc.delete()
+
+            # Check if client has other accounts
+            if client and not ModelAccount.objects.filter(client=client).exists():
+                client.delete()  # Delete client if no other accounts are linked
+
+            return f"The account with RIB {rib} has been deleted."
+        except ModelAccount.DoesNotExist:
+            raise ObjectDoesNotExist("Account does not exist.")
+
 
 #configure the SOAP API
 application=Application(
