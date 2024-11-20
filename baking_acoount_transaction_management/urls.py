@@ -16,7 +16,7 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from account_transaction_app import urls
+from account_app import urls
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('bank/', include(urls)),
