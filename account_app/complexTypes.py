@@ -9,7 +9,7 @@ class Account(ComplexModel):
     rib=Unicode
     client=Client
     balance=Double
-    AccountType=Unicode
+    accountType=Unicode
     creationDate=Date
 
 class Transaction(ComplexModel):
